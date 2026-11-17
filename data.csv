@@ -1,4 +1,3 @@
-
 Student_ID,Forgets_Assignment,Uses_Reminders,Preferred_Reminder_Time,Missed_Deadline,Automatic_Assignment_Import
 1,Yes,No,3 hours,Yes,Yes
 2,Yes,No,2 hours,Yes,Yes
@@ -10,3 +9,13 @@ Student_ID,Forgets_Assignment,Uses_Reminders,Preferred_Reminder_Time,Missed_Dead
 8,Yes,Yes,3 hours,Yes,Yes
 9,No,Yes,1 hour,No,No
 10,Yes,No,2 hours,No,Yes
+11,Yes,No,3 hours,Yes,Yes
+12,Yes,No,3 hours,Yes,Yes
+13,No,Yes,2 hours,No,Yes
+14,Yes,No,3 hours,Yes,Yes
+15,Yes,Yes,4 hours,No,Yes
+16,Yes,No,3 hours,Yes,Yes
+17,No,No,2 hours,Yes,Yes
+18,Yes,No,3 hours,Yes,Yes
+19,Yes,Yes,2 hours,No,Yes
+20,Yes,No,3 hours,Yes,Yes

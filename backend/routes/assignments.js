@@ -5,6 +5,7 @@ const Assignment = require('../models/Assignment');
 const { syncClassroomAssignments } = require('../services/classroomService');
 const { isEmailConfigured, sendTestEmail } = require('../services/emailService');
 const { checkAndSendReminders } = require('../services/schedulerService');
+const { analyzeFieldworkData } = require('../services/surveyAnalyzer');
 
 // Middleware to ensure user is logged in
 const ensureAuth = (req, res, next) => {
@@ -224,6 +225,21 @@ router.get('/', ensureAuth, async (req, res) => {
       success: false,
       error: 'Failed to retrieve assignments.',
     });
+  }
+});
+
+/**
+ * GET /api/assignments/fieldwork-stats
+ * Reads and analyzes data.csv collected from Hostel K, NIT Jamshedpur.
+ * Demonstrates live threshold evaluation and bad-row detection.
+ */
+router.get('/fieldwork-stats', (req, res) => {
+  try {
+    const thresholdOverride = req.query.threshold ? parseFloat(req.query.threshold) : undefined;
+    const stats = analyzeFieldworkData(null, thresholdOverride);
+    return res.status(200).json({ success: true, stats });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

@@ -25,7 +25,7 @@ but someone have no issue as they make alarm by himself, but some don't make ala
 so they want who can remind us 2-3 hours ago
 
 ## 4. Data Collection
-- Total students: 10
+- Total students: 20
 - File name: data.csv
-- How I collected the data: I ask to my some personal groups to my friend about this, so total 10 student I have data
+- How I collected the data: I visited rooms across the ground and 1st floor wings in Hostel K and asked 20 classmates and hostel mates about their assignment submission habits, whether they use alarms, when they prefer reminders, and if they ever missed an 11:59 PM deadline. Recorded their direct responses in data.csv.
 
