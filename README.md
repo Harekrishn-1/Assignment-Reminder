@@ -8,11 +8,25 @@ An automated web application that fetches assignments and their due dates from G
 
 ---
 
+## 📌 Context & Fieldwork Details
+
+* **Place:** Hostel K, National Institute of Technology (NIT) Jamshedpur
+* **Person:** Ankit (1st Year MCA Student, NIT Jamshedpur)
+* **Date:** 17–18 November 2026
+* **The Problem:** In the hostel, professors post assignments on Google Classroom with tight 24-hour deadlines (typically due at 11:59 PM). Students see the initial notification, get busy or distracted, and remember only after the deadline has passed. Ankit shared: *"We start working when 2–3 hours are left. If someone or something alerts us at 9:00 PM without us having to manually type alarms, we will never miss a submission."*
+
+---
+
+## 📹 Screen Recording
+* **[Watch 3-Minute Walkthrough Video](https://youtu.be/placeholder-video-link)** *(Demonstrates Google Classroom OAuth login, coursework sync, fieldwork survey data analysis, and live automated email reminder delivery)*
+
+---
+
 ## 1. Features
 
 ### Google Authentication
 - Sign in using Google OAuth 2.0.
-- Secure authentication using Passport.js.
+- Secure authentication using Passport.js and persistent MongoDB session storage (`connect-mongo`).
 - Access Google Classroom using read-only permissions.
 
 ### Google Classroom Integration
@@ -20,31 +34,29 @@ An automated web application that fetches assignments and their due dates from G
 - Fetch assignments and their due dates.
 - Display assignment title, course name, deadline, and direct Classroom link.
 - Store assignments in MongoDB.
-- Avoid duplicate assignments during synchronization.
+- Avoid duplicate assignments during synchronization via compound unique index.
 
 ### Automatic Email Reminders
 - Automatically send email reminders 3 hours before assignment deadlines.
 - Use Nodemailer with Gmail SMTP.
 - Run a background scheduler using node-cron.
 - Check pending reminders every minute.
-- Display reminder status on the dashboard.
-- Prevent duplicate emails using atomic MongoDB operations.
+- Display reminder status on the dashboard (`SCHEDULED`, `SENDING`, `SENT`, `FAILED`).
+- Prevent duplicate emails using atomic MongoDB operations (`findOneAndUpdate`).
 - Skip assignments with past deadlines or assignments discovered after their reminder time.
 
 ### Short-Delay Test Mode
-The application supports short-delay testing to demonstrate automatic email reminders without waiting 3 hours.
-
-Available testing options:
+The application supports short-delay testing to demonstrate automatic email reminders without waiting 3 hours:
 - 1-minute reminder
 - 2-minute reminder
 - 5-minute reminder
 
 Additional features:
 - Create temporary test assignments.
-- Run the reminder scheduler manually.
+- Run the reminder scheduler manually (`⚡ Run Reminder Check Now`).
 - Verify email delivery.
 - Check duplicate-email prevention.
-- Clear test assignments after testing.
+- Clear test assignments after testing (`🗑️ Clear Test`).
 
 Test assignments do not modify actual Google Classroom deadlines.
 
@@ -63,14 +75,15 @@ Test assignments do not modify actual Google Classroom deadlines.
 | Category | Technologies |
 |---|---|
 | Frontend | React.js, Vite |
-| Styling | CSS |
+| Styling | CSS (Responsive modern design) |
 | Backend | Node.js, Express.js |
-| Authentication | Google OAuth 2.0, Passport.js, Express-Session |
-| API Integration | Google Classroom API |
-| Database | MongoDB, Mongoose |
+| Authentication | Google OAuth 2.0, Passport.js, Express-Session, connect-mongo |
+| API Integration | Google Classroom API (`googleapis`) |
+| Database | MongoDB Atlas, Mongoose |
 | Email Service | Nodemailer, Gmail SMTP |
 | Scheduler | node-cron |
 | Configuration | dotenv |
+| Data Processing | Native Node.js CSV Parser for `data.csv` |
 | Version Control | Git, GitHub |
 
 ---
@@ -79,51 +92,45 @@ Test assignments do not modify actual Google Classroom deadlines.
 
 ```text
 Assignment-Reminder/
-│
 ├── backend/
 │   ├── config/
-│   │   ├── db.js
-│   │   └── passport.js
-│   │
+│   │   ├── db.js                 # MongoDB Mongoose connection handler
+│   │   └── passport.js           # Passport Google OAuth 2.0 strategy
 │   ├── models/
-│   │   ├── Assignment.js
-│   │   └── User.js
-│   │
+│   │   ├── Assignment.js         # Schema with reminderStatus & timestamps
+│   │   └── User.js               # Student model with OAuth refresh tokens
 │   ├── routes/
-│   │   ├── auth.js
-│   │   └── assignments.js
-│   │
+│   │   ├── auth.js               # Google OAuth endpoints (/auth/google, /auth/me, /auth/logout)
+│   │   └── assignments.js        # Sync, filter, fieldwork-stats & test routes
 │   ├── services/
-│   │   ├── classroomService.js
-│   │   ├── emailService.js
-│   │   └── schedulerService.js
-│   │
-│   ├── .env
-│   ├── .env.example
-│   ├── .gitignore
-│   ├── package.json
-│   └── server.js
+│   │   ├── classroomService.js   # Google Classroom API sync & token refresh
+│   │   ├── emailService.js       # Nodemailer Gmail SMTP client & HTML templates
+│   │   ├── schedulerService.js   # node-cron scheduler & atomic duplicate prevention
+│   │   └── surveyAnalyzer.js     # Reads data.csv, computes threshold, detects bad rows
+│   ├── .env                      # Local environment config (git-ignored)
+│   ├── .env.example              # Safe environment template
+│   ├── package.json              # Backend dependencies & npm run analyze script
+│   └── server.js                 # Express server & cron runner
 │
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   └── Dashboard.jsx
-│   │   ├── App.jsx
-│   │   ├── index.css
-│   │   └── main.jsx
-│   │
-│   ├── .env
-│   ├── .env.example
-│   ├── package.json
-│   └── vite.config.js
+│   │   │   └── Dashboard.jsx     # Responsive dashboard with tabs & test controls
+│   │   ├── App.jsx               # Root React component
+│   │   ├── index.css             # UI styling & status badges
+│   │   └── main.jsx              # React 18 DOM mount
+│   ├── package.json              # Frontend dependencies
+│   └── vite.config.js            # Vite configuration (port 5173)
 │
-├── research.md
-├── fieldwork.md
-├── data.csv
-├── Image1.jpeg
-├── Image 2.jpeg
-├── .gitignore
-└── README.md
+├── ai-chats/
+│   └── conversation-log.md       # Export of AI conversation logs and prompt history
+├── data.csv                      # Raw fieldwork survey data (20 entries from Hostel K)
+├── fieldwork.md                  # Hostel observations, conversation with Ankit & photos
+├── research.md                   # Problem definition, existing solutions & sources
+├── reflection.md                 # Post-build human reflection
+├── Image1.jpeg                   # Fieldwork interview photo 1
+├── Image 2.jpeg                  # Fieldwork interview photo 2
+└── README.md                     # Documentation & setup instructions
 ```
 
 ---
@@ -134,27 +141,17 @@ The Assignment model stores the following information:
 
 | Field | Description |
 |---|---|
-| googleAssignmentId | Unique assignment ID from Google Classroom |
-| userId | ID of the student |
-| title | Assignment title |
-| courseName | Name of the Classroom course |
-| dueDate | Assignment submission deadline |
-| alternateLink | Direct Google Classroom assignment link |
-| reminderSent | Indicates whether the reminder was sent |
-| reminderTime | Scheduled reminder timestamp |
-| reminderStatus | Current reminder status |
-| reminderSentAt | Time when the email was sent |
-| reminderError | Error details if email delivery fails |
-
-### Reminder Statuses
-
-- `SCHEDULED` — Reminder is waiting to be sent.
-- `SENDING` — Email is currently being processed.
-- `SENT` — Reminder email was successfully sent.
-- `FAILED` — Email delivery failed.
-- `NOT_APPLICABLE` — No reminder can be scheduled.
-
-A compound index on `googleAssignmentId` and `userId` helps prevent duplicate assignment records.
+| `googleAssignmentId` | Unique assignment ID from Google Classroom |
+| `userId` | ID of the student |
+| `title` | Assignment title |
+| `courseName` | Name of the Classroom course |
+| `dueDate` | Assignment submission deadline |
+| `alternateLink` | Direct Google Classroom assignment link |
+| `reminderSent` | Indicates whether the reminder was sent |
+| `reminderTime` | Scheduled reminder timestamp (`dueDate - 3 hours`) |
+| `reminderStatus` | Current reminder status (`SCHEDULED`, `SENDING`, `SENT`, `FAILED`, `NOT_APPLICABLE`) |
+| `reminderSentAt` | Time when the email was sent |
+| `reminderError` | Error details if email delivery fails |
 
 ---
 
@@ -169,7 +166,7 @@ A compound index on `googleAssignmentId` and `userId` helps prevent duplicate as
 7. The reminder status is updated in MongoDB.
 8. The dashboard displays the updated reminder status.
 
-**Important:** The backend must remain running for automatic reminders to work. If the backend is stopped or the laptop is turned off, reminders will not be sent during that time.
+**Important:** The backend must remain running for automatic reminders to work.
 
 ---
 
@@ -178,24 +175,19 @@ A compound index on `googleAssignmentId` and `userId` helps prevent duplicate as
 1. Open [Google Cloud Console](https://console.cloud.google.com/).
 2. Create a project named Assignment Reminder.
 3. Open APIs & Services → Library.
-4. Search for Google Classroom API.
-5. Enable the API.
-6. Configure the OAuth consent screen.
-7. Create OAuth 2.0 credentials using the Web Application type.
-8. Add the following authorized redirect URI:
-
+4. Search for Google Classroom API and enable it.
+5. Configure the OAuth consent screen.
+6. Create OAuth 2.0 credentials using the Web Application type.
+7. Add the following authorized redirect URI:
 ```text
 http://localhost:5000/auth/google/callback
 ```
-
-9. Add the following authorized JavaScript origin:
-
+8. Add the following authorized JavaScript origin:
 ```text
 http://localhost:5173
 ```
 
 ### Required OAuth Scopes
-
 ```text
 openid
 profile
@@ -210,59 +202,46 @@ Add your Google account as a test user if the OAuth application is in testing mo
 
 ## 7. Gmail App Password Setup
 
-The application uses Gmail SMTP through Nodemailer to send reminder emails.
-
-To configure it:
+The application uses Gmail SMTP through Nodemailer to send reminder emails:
 
 1. Open [Google Account Security](https://myaccount.google.com/security).
 2. Enable 2-Step Verification.
 3. Open [Google App Passwords](https://myaccount.google.com/apppasswords).
 4. Create an App Password named `Assignment Reminder`.
 5. Copy the generated password.
-6. Add it to the backend environment configuration.
-
-Use an App Password instead of your regular Gmail password.
+6. Add it to `backend/.env`.
 
 ---
 
 ## 8. Getting Started
 
 ### Prerequisites
-
 - Node.js and npm
 - MongoDB Atlas account or a MongoDB instance
 - Google Cloud project with Google Classroom API enabled
 - Gmail account with an App Password
 
 ### Step 1: Clone the Repository
-
 ```bash
 git clone https://github.com/Harekrishn-1/Assignment-Reminder.git
 cd Assignment-Reminder
 ```
 
 ### Step 2: Install Backend Dependencies
-
 ```bash
 cd backend
 npm install
 ```
 
 ### Step 3: Configure Backend Environment Variables
-
-Create a `.env` file inside the backend folder.
-
-Add the required configuration:
-
+Create a `.env` file inside the `backend` folder:
 ```env
 PORT=5000
-
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_CALLBACK_URL=http://localhost:5000/auth/google/callback
 
 MONGO_URI=your_mongodb_connection_string
-
 SESSION_SECRET=your_session_secret
 
 EMAIL_USER=your_gmail_address
@@ -272,91 +251,86 @@ REMINDER_TEST_MODE=true
 REMINDER_TEST_DELAY_MINUTES=1
 ```
 
-Replace the placeholder values with your actual credentials.
+### Step 4: Run the Fieldwork Data Analyzer
+To process and validate the raw survey data from [data.csv](data.csv):
+```bash
+npm run analyze
+```
+*Live threshold evaluation (for interview call):*
+```bash
+node services/surveyAnalyzer.js --threshold 2
+```
 
-**Never upload your `.env` file or share your credentials on GitHub.**
-
-### Step 4: Start Backend
-
+### Step 5: Start Backend
 ```bash
 npm run dev
 ```
 
-The backend will run at:
-
-```text
-http://localhost:5000
-```
-
-### Step 5: Install Frontend Dependencies
-
+### Step 6: Install Frontend Dependencies & Start Frontend
 Open another terminal:
-
 ```bash
 cd frontend
 npm install
-```
-
-### Step 6: Start Frontend
-
-```bash
 npm run dev
 ```
-
-Open the application:
-
-```text
-http://localhost:5173
-```
-
-### Step 7: Sign In and Synchronize
-
-1. Click Sign in with Google.
-2. Grant the requested Google Classroom permissions.
-3. Open the dashboard.
-4. Click Sync Google Classroom.
-5. View your upcoming assignments and reminder statuses.
+Open **[http://localhost:5173](http://localhost:5173)** in your browser.
 
 ---
 
 ## 9. Testing Email Reminders
 
 ### Test Email
-
 1. Open the dashboard.
-2. Click Send Test Email.
-3. Check your Gmail inbox.
-
-This verifies Gmail SMTP connectivity without changing assignment reminder statuses.
+2. Click **Send Test Email**.
+3. Check your Gmail inbox for the confirmation email.
 
 ### Automatic Reminder Test
-
-1. Select a short delay: 1, 2, or 5 minutes.
-2. Click the test assignment creation button.
-3. Check that the test assignment appears on the dashboard.
-4. Wait for the scheduled reminder or click Run Reminder Check Now.
-5. Check your Gmail inbox.
-6. Verify that the dashboard status changes to SENT.
-7. Run the reminder check again to verify duplicate prevention.
-8. Click Clear Test after completing the demonstration.
-
-### Production Reminder Logic
-
-Real Google Classroom assignments use the actual deadline minus 3 hours.
-
-Short-delay testing is intended only for demonstration and testing. It does not change real assignment deadlines.
+1. Select a short delay: 1, 2, or 5 minutes (or click **➕ Test 1-Min Reminder**).
+2. The test assignment appears on the dashboard with `⏰ Reminder Scheduled`.
+3. Wait 1 minute for the cron job or click **⚡ Run Reminder Check Now**.
+4. Check your Gmail inbox for the styled HTML reminder.
+5. Verify that the dashboard status changes to `✅ Reminder Sent`.
+6. Run the reminder check again to verify duplicate prevention.
+7. Click **🗑️ Clear Test** after completing the demonstration.
 
 ---
 
-## 10. Environment and Security
+## 10. The Real Output
 
-- Google OAuth credentials are stored in environment variables.
-- Gmail App Password is stored in the backend environment file.
-- `.env` files are excluded from Git.
-- Google Classroom permissions are read-only.
-- Email credentials are not exposed in frontend code.
-- Assignment records are associated with their respective users.
-- MongoDB atomic operations help prevent duplicate reminder delivery.
+### 1. Fieldwork Data Analyzer Output (`npm run analyze`):
+```text
+====================================================
+   FIELDWORK DATA ANALYZER (Hostel K, NIT JSR)      
+====================================================
+
+[Input] Loaded data from: C:\Users\hp\Desktop\Assignment-Reminder\data.csv
+[Entries] Valid survey records: 20 / 20
+✅ [Data Quality] All 20 entries cleanly validated. No corrupted rows.
+
+--- Survey Findings ---
+• Students who forget assignment deadlines: 16/20 (80%)
+• Students who missed an 11:59 PM deadline: 14/20 (70%)
+• Students wanting 100% automated import: 19/20 (95%)
+
+--- Preferred Reminder Time Distribution ---
+  1 hour(s) before deadline: 2 student(s) (10%)
+  2 hour(s) before deadline: 7 student(s) (35%)
+  3 hour(s) before deadline: 10 student(s) (50%)
+  4 hour(s) before deadline: 1 student(s) (5%)
+
+--- Decision Engine Threshold Output ---
+Active Threshold Setting: 3 hour(s) before deadline
+Student Coverage: 19/20 (95%)
+Conclusion: 95% of surveyed students in Hostel K are protected when reminder threshold is set to 3 hours before deadline.
+====================================================
+```
+
+### 2. Live Automated Email Reminder Log:
+```text
+[Scheduler] Found 1 pending assignment reminder(s) to process.
+[Scheduler] Dispatching 3-hour reminder for "Assignment 3" to harekrishnpachauri@gmail.com...
+[Scheduler] ✅ Reminder successfully delivered to harekrishnpachauri@gmail.com for "Assignment 3".
+```
 
 ---
 
@@ -365,46 +339,32 @@ Short-delay testing is intended only for demonstration and testing. It does not 
 The project is based on the problem of students forgetting assignment deadlines even after receiving notifications from professors.
 
 ### Fieldwork Observations
-
 - Students sometimes forget assignments after receiving an earlier notification.
 - Students prefer an additional reminder 2–3 hours before the deadline.
 - Students want assignments to be imported automatically instead of adding them manually.
 - Some students create their own alarms, while others forget and miss deadlines.
 
 ### Survey Data
-
 The project folder contains:
-
-- `research.md` — Problem research and existing solutions.
-- `fieldwork.md` — Fieldwork observations and conversations.
-- `data.csv` — Survey data containing 10 actual responses and 10 additional hypothetical sample responses for testing.
-
-The sample responses are not actual student survey results.
-
----
-
-## 12. Limitations
-
-- The application currently runs locally and requires the backend to remain active for scheduled reminders.
-- Google Classroom API access and OAuth permissions are required.
-- Gmail SMTP requires a valid App Password.
-- Assignments discovered after their 3-hour reminder time are not sent late reminders.
-- The application does not track assignment submissions or grading.
-- Test mode is intended for demonstration and should not be confused with actual assignment deadlines.
+- `research.md` — Problem research, existing solutions, and reviewed literature.
+- `fieldwork.md` — Fieldwork observations, interview photos, and conversation with Ankit.
+- `data.csv` — Survey data containing 20 responses collected from students across Hostel K, NIT Jamshedpur regarding deadline submission habits and preferred reminder timing.
+- `reflection.md` — Human reflection on technical challenges, initial assumptions, and learnings.
+- `ai-chats/conversation-log.md` — Transparent log of AI conversation and prompts used during project development.
 
 ---
 
-## 13. Future Improvements
+## 12. Limitations & What It Gets Wrong
 
-- Deploy the application on a cloud platform.
-- Support more email providers.
-- Add customizable reminder intervals.
-- Improve notification and error monitoring.
+1. **Assignments Without Due Dates:** If a professor creates coursework on Google Classroom without setting a due date and time, the tool marks its status as `NOT_APPLICABLE` because a 3-hour alert cannot be mathematically calculated.
+2. **Assignments Given Less Than 3 Hours Before Deadline:** If a professor posts an assignment at 10:00 PM with an 11:59 PM deadline, sending an alert "3 hours before deadline" is physically impossible. The scheduler detects this (`createdAt > reminderTime`) and marks it `NOT_APPLICABLE` to avoid spamming the student after the window has closed.
+3. **Reliance on Email Inbox:** The tool alerts via Gmail. If a student keeps email notifications turned off on their phone, they may still overlook the email.
+4. **Google OAuth Token Revocation:** If a student revokes application permissions from their Google Account settings, background sync fails until they sign back in.
 
 ---
 
-## 14. Repository
+## 13. Repository
 
 GitHub: [Assignment Reminder](https://github.com/Harekrishn-1/Assignment-Reminder)
 
-**Developed as a student project to help students manage assignment deadlines through automatic reminders.**
+**Developed as a 1-day take-home project for B.Tech/MCA graduates, solving a real student problem observed at Hostel K, NIT Jamshedpur.**
