@@ -18,7 +18,7 @@ An automated web application that fetches assignments and their due dates from G
 ---
 
 ## 📹 Screen Recording
-* **[Watch 3-Minute Walkthrough Video](https://youtu.be/placeholder-video-link)** *(Demonstrates Google Classroom OAuth login, coursework sync, fieldwork survey data analysis, and live automated email reminder delivery)*
+* **[Watch 3-Minute Walkthrough Video (Google Drive)](https://drive.google.com/file/d/1t-B02t1USnJqTlbOlHnK2BXQDWUmFbrh/view?usp=sharing)** *(Explains the real student problem at Hostel K, the initial to-do app idea vs. shifting to automated Classroom sync after discussing with Ankit, fieldwork survey analysis, and live automated email reminder demonstration)*
 
 ---
 
