@@ -46,17 +46,27 @@ router.post('/sync', ensureAuth, async (req, res) => {
 
 /**
  * GET /api/assignments
- * Returns saved assignments for the authenticated student, sorted by due date.
+ * Returns upcoming assignments for the authenticated student.
+ * Filters strictly where dueDate >= now, sorted by nearest deadline first.
+ * Does NOT delete past assignments from MongoDB.
  */
 router.get('/', ensureAuth, async (req, res) => {
   try {
-    const assignments = await Assignment.find({ userId: req.user._id.toString() }).sort({
-      dueDate: 1, // Ascending: earliest deadlines first
-      createdAt: -1,
+    const now = new Date();
+    const filterQuery = { userId: req.user._id.toString() };
+
+    // Default to showing only upcoming assignments (dueDate >= current time)
+    if (req.query.all !== 'true') {
+      filterQuery.dueDate = { $ne: null, $gte: now };
+    }
+
+    const assignments = await Assignment.find(filterQuery).sort({
+      dueDate: 1, // Ascending: nearest deadline first
     });
 
     return res.status(200).json({
       success: true,
+      count: assignments.length,
       assignments,
     });
   } catch (error) {

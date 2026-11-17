@@ -17,7 +17,7 @@ function Dashboard() {
   // Backend URL from Vite environment variable
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
-  // Helper to fetch saved assignments
+  // Helper to fetch upcoming assignments from backend API
   const fetchAssignments = async () => {
     setIsLoadingAssignments(true);
     try {
@@ -37,7 +37,7 @@ function Dashboard() {
   };
 
   useEffect(() => {
-    // 1. Check URL query parameters for OAuth redirect notices
+    // 1. Check URL query parameters for OAuth notices
     const params = new URLSearchParams(window.location.search);
     const errorParam = params.get('error');
     if (errorParam === 'oauth_not_configured') {
@@ -165,6 +165,23 @@ function Dashboard() {
     });
   };
 
+  // Compute countdown badge
+  const getDueBadgeText = (dateString) => {
+    if (!dateString) return null;
+    const due = new Date(dateString);
+    const now = new Date();
+    const diffMs = due.getTime() - now.getTime();
+    if (diffMs <= 0) return 'Due now';
+
+    const diffHours = Math.round(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffHours <= 1) return 'Due in < 1 hour';
+    if (diffHours < 24) return `Due in ${diffHours} hours`;
+    if (diffDays === 1) return 'Due tomorrow';
+    return `Due in ${diffDays} days`;
+  };
+
   return (
     <div className="app-container">
       {/* Header */}
@@ -281,7 +298,7 @@ function Dashboard() {
             <div className="card-header-row">
               <div className="section-title">
                 <h2>Upcoming Assignments</h2>
-                <span className="badge-count">{assignments.length} Total</span>
+                <span className="badge-count">{assignments.length} Upcoming</span>
               </div>
 
               {/* Sync Google Classroom Button */}
@@ -308,23 +325,23 @@ function Dashboard() {
             {/* Assignments View */}
             {isLoadingAssignments ? (
               <div style={{ textAlign: 'center', padding: '2rem', color: '#5f6368' }}>
-                Loading saved assignments...
+                Loading upcoming assignments...
               </div>
             ) : assignments.length === 0 ? (
-              /* Empty state (No fake data!) */
+              /* Proper Empty State for No Upcoming Assignments */
               <div className="assignment-placeholder">
-                <div className="placeholder-icon">📚</div>
-                <h3 className="placeholder-title">No Assignments Found</h3>
+                <div className="placeholder-icon">🎉</div>
+                <h3 className="placeholder-title">No Upcoming Assignments Due</h3>
                 <p className="placeholder-text">
-                  You haven't synced your assignments yet, or there are no published assignments
-                  in your enrolled courses.
+                  You are all caught up! There are no pending assignments with upcoming deadlines
+                  in your enrolled Google Classroom courses.
                 </p>
                 <button onClick={handleSyncClassroom} disabled={isSyncing} className="btn-sync">
-                  Sync Google Classroom Now
+                  Check for New Assignments
                 </button>
               </div>
             ) : (
-              /* List of Real Synced Assignments */
+              /* List of Upcoming Assignments (Sorted by nearest deadline first) */
               <div className="assignments-list">
                 {assignments.map((assignment) => (
                   <div key={assignment._id || assignment.googleAssignmentId} className="assignment-item">
@@ -349,9 +366,11 @@ function Dashboard() {
                       <span className="due-date-text">
                         Due: {formatDueDate(assignment.dueDate)}
                       </span>
-                      <span className="due-date-sub">
-                        Status: Pending Reminder
-                      </span>
+                      {getDueBadgeText(assignment.dueDate) && (
+                        <span className="due-date-sub" style={{ color: '#1a73e8', fontWeight: 600 }}>
+                          {getDueBadgeText(assignment.dueDate)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
