@@ -1,8 +1,8 @@
 # Assignment Reminder
 
-An automated web application designed to fetch assignments and due dates from Google Classroom and send students timely reminders before their deadlines.
+An automated web application designed to fetch assignments and due dates from Google Classroom and send students timely email reminders **3 hours** before their deadlines.
 
-> **Project Scope:** Focused strictly on proactive reminders (e.g. 2–3 hours before due time) to ensure students never miss an assignment deadline. It does not track submissions, calculate marks, or manage grading.
+> **Project Scope:** Focused strictly on proactive reminders (3 hours before due time) to ensure students never miss an assignment deadline. It does not track submissions, calculate marks, or manage grading.
 
 ---
 
@@ -12,18 +12,26 @@ An automated web application designed to fetch assignments and due dates from Go
 - **Backend:** Node.js, Express.js, Passport.js, Express-Session, CORS, Dotenv
 - **Integration:** Google Classroom API (`googleapis`)
 - **Authentication:** Google OAuth 2.0 (Passport Google Strategy with Classroom Scopes)
+- **Email Service:** Nodemailer with Gmail SMTP
+- **Task Scheduling:** `node-cron` (checks pending reminders every minute)
 - **Database:** MongoDB with Mongoose ORM
 
 ---
 
-## Google Classroom Scopes
+## Automatic 3-Hour Email Reminders
 
-The application requests the following read-only OAuth 2.0 scopes:
-1. `openid` — OpenID Connect identity
-2. `profile` — Basic user profile info (name, avatar)
-3. `email` — Student email address
-4. `https://www.googleapis.com/auth/classroom.courses.readonly` — Read student's enrolled courses
-5. `https://www.googleapis.com/auth/classroom.coursework.me.readonly` — Read student's coursework and assignment due dates
+1. **Scheduling Logic:**
+   - When assignments are synced from Google Classroom, a reminder timestamp is set:  
+     `reminderTime = dueDate - 3 hours`.
+   - The cron scheduler (`node-cron`) wakes up every minute to check for assignments where `reminderTime <= now` and `dueDate > now`.
+2. **Duplicate Prevention:**
+   - Uses an atomic MongoDB lock (`findOneAndUpdate` transitioning status to `SENDING`).
+   - Marks status as `SENT` only after Nodemailer confirms delivery.
+   - If delivery fails, status becomes `FAILED` with error logging, allowing safe retry without duplicate emails.
+3. **Smart Exclusions:**
+   - Past deadlines (`dueDate < now`) are skipped.
+   - Assignments without deadlines (`dueDate: null`) are marked `NOT_APPLICABLE`.
+   - Assignments discovered after their 3-hour mark has already passed are not immediately spammed.
 
 ---
 
@@ -36,25 +44,27 @@ Assignment-Reminder/
 │   │   ├── db.js                 # MongoDB Mongoose connection handler
 │   │   └── passport.js           # Passport.js Google OAuth 2.0 strategy
 │   ├── models/
-│   │   ├── Assignment.js         # Assignment data schema & compound index
-│   │   └── User.js               # Student model with OAuth access & refresh tokens
+│   │   ├── Assignment.js         # Assignment schema with reminderStatus
+│   │   └── User.js               # Student model with OAuth tokens
 │   ├── routes/
 │   │   ├── auth.js               # Google OAuth routes (/auth/google, /auth/me, /auth/logout)
-│   │   └── assignments.js        # Classroom sync & fetch (/api/assignments, /api/assignments/sync)
+│   │   └── assignments.js        # Classroom sync & test-email routes
 │   ├── services/
-│   │   └── classroomService.js   # Google Classroom API integration & token refresh handler
+│   │   ├── classroomService.js   # Google Classroom API integration & token refresh
+│   │   ├── emailService.js       # Nodemailer Gmail SMTP client & HTML templates
+│   │   └── schedulerService.js   # node-cron scheduler & atomic duplicate prevention
 │   ├── .env                      # Local environment config (git-ignored)
 │   ├── .env.example              # Safe environment template
 │   ├── .gitignore                # Ignores node_modules, .env, logs
 │   ├── package.json              # Backend scripts & dependencies
-│   └── server.js                 # Express server & API routes
+│   └── server.js                 # Express server entry point & cron runner
 │
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   └── Dashboard.jsx     # Dashboard with Google sign-in & Classroom sync
+│   │   │   └── Dashboard.jsx     # Dashboard with test email & reminder badges
 │   │   ├── App.jsx               # Root React component
-│   │   ├── index.css             # Responsive styles, assignment cards & badges
+│   │   ├── index.css             # Responsive styles, reminder status badges
 │   │   └── main.jsx              # React 18 DOM entry point
 │   ├── .env                      # Local frontend config (git-ignored)
 │   ├── .env.example              # Frontend environment template
@@ -82,36 +92,62 @@ Assignment-Reminder/
 | `courseName` | String (Required) | Name of the enrolled Classroom course |
 | `dueDate` | Date (Optional) | Due deadline in UTC (or `null` if none set) |
 | `alternateLink` | String | Direct URL to assignment in Google Classroom |
-| `reminderSent` | Boolean | Flag tracking if alert was sent (default: `false`) |
-| `reminderTime` | Date | Scheduled reminder timestamp |
-
-*Note: Compound index on `{ googleAssignmentId: 1, userId: 1 }` prevents duplicates.*
+| `reminderTime` | Date | Scheduled reminder timestamp (`dueDate - 3 hours`) |
+| `reminderSent` | Boolean | True once reminder email has been sent |
+| `reminderStatus` | String (Enum) | `SCHEDULED`, `SENDING`, `SENT`, `FAILED`, `NOT_APPLICABLE` |
+| `reminderSentAt` | Date | Timestamp of successful email dispatch |
+| `reminderError` | String | Error message if delivery failed |
 
 ---
 
-## Getting Started
+## Gmail SMTP Setup (App Password)
 
-### 1. Enable Google Classroom API in Google Cloud
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
-2. Select your project.
-3. Navigate to **APIs & Services > Library**.
-4. Search for **Google Classroom API** and click **Enable**.
-5. In **APIs & Services > OAuth consent screen > Scopes**, add:
-   - `.../auth/classroom.courses.readonly`
-   - `.../auth/classroom.coursework.me.readonly`
+To send automated reminder emails via Gmail:
 
-### 2. Run Backend
+1. Go to your **[Google Account Security Settings](https://myaccount.google.com/security)**.
+2. Enable **2-Step Verification** (if not already enabled).
+3. Search for **App passwords** in the top search bar (or go to *2-Step Verification > App passwords*).
+4. Enter an app name like `Assignment Reminder` and click **Create**.
+5. Google will generate a 16-character password (e.g. `abcd efgh ijkl mnop`).
+6. Copy this password into [backend/.env](file:///c:/Users/hp/Desktop/Assignment-Reminder/backend/.env):
+   ```env
+   EMAIL_USER=your_actual_email@gmail.com
+   EMAIL_APP_PASSWORD=abcdefghijklmnop
+   ```
+
+---
+
+## How to Run & Test
+
+### 1. Start Backend
 ```powershell
 cd backend
 npm run dev
 ```
+You will see:
+```text
+[Scheduler] Initializing automated reminder cron job (running every minute: * * * * *)...
+Server is running on port 5000
+[MongoDB Connected] Host: ...
+```
 
-### 3. Run Frontend
-In a separate terminal:
+### 2. Start Frontend
+In a second terminal:
 ```powershell
 cd frontend
 npm run dev
 ```
-Open **[http://localhost:5173](http://localhost:5173)** in your browser:
-1. Click **"Sign in with Google"** and grant access to Google Classroom courses & coursework.
-2. Click **"Sync Google Classroom"** to import your assignments.
+Open **[http://localhost:5173](http://localhost:5173)** in your browser.
+
+### 3. Test Email Verification
+1. Sign in with Google.
+2. Click the **"Send Test Email"** button in the dashboard.
+3. Check your student Gmail inbox for the test confirmation email.
+
+### 4. Automatic Reminders
+1. Click **"Sync Google Classroom"** to load upcoming coursework.
+2. Each assignment will display its reminder status badge:
+   - `⏰ Reminder Scheduled`
+   - `✅ Reminder Sent`
+   - `⚠️ Reminder Failed`
+3. When the 3-hour threshold arrives, `node-cron` automatically delivers the email and updates the badge to `✅ Reminder Sent`.

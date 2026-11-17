@@ -65,7 +65,7 @@ router.get('/google', (req, res, next) => {
   console.log(`[OAuth Diagnostic] Response Type: code`);
   console.log(`[OAuth Diagnostic] Scopes: ${GOOGLE_SCOPES.join(', ')}`);
   console.log(`[OAuth Diagnostic] Access Type: offline`);
-  console.log(`[OAuth Diagnostic] Prompt: consent`);
+  console.log(`[OAuth Diagnostic] Prompt: select_account consent`);
 
   if (!isRealFormat) {
     console.warn('\n[OAuth Notice] Your GOOGLE_CLIENT_ID appears to be a placeholder ("your_google_client_id_here...").');
@@ -78,7 +78,7 @@ router.get('/google', (req, res, next) => {
   passport.authenticate('google', {
     scope: GOOGLE_SCOPES,
     accessType: 'offline', // Requests refresh token for background reminder sync
-    prompt: 'consent', // Ensures Google shows consent screen so new scopes can be approved
+    prompt: 'select_account consent', // Forces account selector to prevent multi-account authuser=1 session collisions
     includeGrantedScopes: true,
   })(req, res, next);
 });

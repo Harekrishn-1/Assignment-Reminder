@@ -38,7 +38,7 @@ const getOAuth2Client = (user) => {
 
 /**
  * Fetches active courses and coursework for the given student user,
- * then saves them into MongoDB without duplicates.
+ * then saves them into MongoDB without duplicates and schedules reminders.
  */
 const syncClassroomAssignments = async (user) => {
   if (!user || !user.accessToken) {
@@ -73,6 +73,7 @@ const syncClassroomAssignments = async (user) => {
   }
 
   let totalSynced = 0;
+  const now = new Date();
 
   // 2. Iterate through each enrolled course and fetch coursework
   for (const course of courses) {
@@ -87,6 +88,9 @@ const syncClassroomAssignments = async (user) => {
       for (const cw of courseWorks) {
         // Parse due date and due time (Google Classroom returns UTC date/time)
         let dueDate = null;
+        let reminderTime = null;
+        let initialStatus = 'NOT_APPLICABLE';
+
         if (cw.dueDate && cw.dueDate.year && cw.dueDate.month && cw.dueDate.day) {
           const year = cw.dueDate.year;
           const month = cw.dueDate.month - 1; // JavaScript Date month is 0-indexed (0-11)
@@ -96,6 +100,43 @@ const syncClassroomAssignments = async (user) => {
           const seconds = cw.dueTime?.seconds || 0;
 
           dueDate = new Date(Date.UTC(year, month, day, hours, minutes, seconds));
+
+          // Schedule reminder exactly 3 hours before the deadline
+          reminderTime = new Date(dueDate.getTime() - 3 * 60 * 60 * 1000);
+
+          // If reminderTime is strictly in the future, mark as SCHEDULED
+          // If the 3-hour mark has already passed at sync time, mark as NOT_APPLICABLE so we don't send immediately
+          if (reminderTime > now) {
+            initialStatus = 'SCHEDULED';
+          } else {
+            initialStatus = 'NOT_APPLICABLE';
+          }
+        }
+
+        // Check if assignment already exists
+        const existing = await Assignment.findOne({
+          googleAssignmentId: cw.id,
+          userId: user._id.toString(),
+        });
+
+        const updateDoc = {
+          googleAssignmentId: cw.id,
+          userId: user._id.toString(),
+          title: cw.title || 'Untitled Assignment',
+          courseName: course.name || 'Untitled Course',
+          dueDate: dueDate,
+          alternateLink: cw.alternateLink || '',
+          reminderTime: reminderTime,
+        };
+
+        if (!existing) {
+          updateDoc.reminderStatus = initialStatus;
+          updateDoc.reminderSent = false;
+        } else if (existing.reminderStatus !== 'SENT') {
+          // If not already sent, update status according to newly evaluated reminderTime
+          if (existing.reminderStatus !== 'SENDING') {
+            updateDoc.reminderStatus = initialStatus;
+          }
         }
 
         // Upsert assignment in MongoDB (prevents duplicates per user & assignment ID)
@@ -104,14 +145,7 @@ const syncClassroomAssignments = async (user) => {
             googleAssignmentId: cw.id,
             userId: user._id.toString(),
           },
-          {
-            googleAssignmentId: cw.id,
-            userId: user._id.toString(),
-            title: cw.title || 'Untitled Assignment',
-            courseName: course.name || 'Untitled Course',
-            dueDate: dueDate,
-            alternateLink: cw.alternateLink || '',
-          },
+          { $set: updateDoc },
           {
             upsert: true,
             new: true,

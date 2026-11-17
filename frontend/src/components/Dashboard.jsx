@@ -8,16 +8,22 @@ function Dashboard() {
     user: null,
   });
 
+  const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming' | 'past'
   const [assignments, setAssignments] = useState([]);
+  const [pastAssignments, setPastAssignments] = useState([]);
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
+
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
+  const [isCreatingTest, setIsCreatingTest] = useState(false);
+  const [isTriggeringReminders, setIsTriggeringReminders] = useState(false);
+  const [testDelayMinutes, setTestDelayMinutes] = useState(1);
 
   const [feedback, setFeedback] = useState({ type: '', message: '' }); // type: 'success' | 'error' | 'warning'
 
-  // Backend URL from Vite environment variable
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
-  // Helper to fetch upcoming assignments from backend API
+  // Helper to fetch assignments from backend API
   const fetchAssignments = async () => {
     setIsLoadingAssignments(true);
     try {
@@ -25,9 +31,19 @@ function Dashboard() {
         method: 'GET',
         credentials: 'include',
       });
+
+      if (res.status === 401) {
+        setFeedback({
+          type: 'warning',
+          message: 'Your session has expired. Please click "Sign Out" and sign in again with Google.',
+        });
+        return;
+      }
+
       if (res.ok) {
         const data = await res.json();
         setAssignments(data.assignments || []);
+        setPastAssignments(data.pastAssignments || []);
       }
     } catch (err) {
       console.error('Failed to load assignments:', err);
@@ -108,6 +124,7 @@ function Dashboard() {
         user: null,
       });
       setAssignments([]);
+      setPastAssignments([]);
       setFeedback({ type: '', message: '' });
     } catch (err) {
       console.error('Logout error:', err);
@@ -125,6 +142,14 @@ function Dashboard() {
         credentials: 'include',
       });
 
+      if (res.status === 401) {
+        setFeedback({
+          type: 'error',
+          message: 'Session expired due to server restart. Please click "Sign Out" and sign in again with Google.',
+        });
+        return;
+      }
+
       const data = await res.json();
 
       if (res.ok && data.success) {
@@ -132,7 +157,6 @@ function Dashboard() {
           type: 'success',
           message: data.message || `Successfully synced ${data.count} assignment(s).`,
         });
-        // Refresh assignments list
         await fetchAssignments();
       } else {
         setFeedback({
@@ -147,6 +171,144 @@ function Dashboard() {
       });
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  // Handle Send Test Email
+  const handleSendTestEmail = async () => {
+    setIsSendingTestEmail(true);
+    setFeedback({ type: '', message: '' });
+
+    try {
+      const res = await fetch(`${backendUrl}/api/assignments/test-email`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (res.status === 401) {
+        setFeedback({
+          type: 'error',
+          message: 'Session expired due to server restart. Please click "Sign Out" and sign in again with Google.',
+        });
+        return;
+      }
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setFeedback({
+          type: 'success',
+          message: data.message || 'Test email sent successfully! Check your inbox.',
+        });
+      } else {
+        setFeedback({
+          type: 'error',
+          message: data.error || 'Failed to send test email. Check EMAIL_USER and EMAIL_APP_PASSWORD in backend/.env',
+        });
+      }
+    } catch (err) {
+      setFeedback({
+        type: 'error',
+        message: 'Network error sending test email.',
+      });
+    } finally {
+      setIsSendingTestEmail(false);
+    }
+  };
+
+  // Handle Create Sample Upcoming Assignment (with configurable short reminder delay for testing)
+  const handleCreateTestAssignment = async (overrideDelay) => {
+    setIsCreatingTest(true);
+    setFeedback({ type: '', message: '' });
+    const delayToUse = overrideDelay !== undefined ? overrideDelay : testDelayMinutes;
+
+    try {
+      const res = await fetch(`${backendUrl}/api/assignments/create-test`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ delayMinutes: delayToUse }),
+        credentials: 'include',
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setFeedback({
+          type: 'success',
+          message: data.message || `Sample test assignment created! Reminder will fire in ${delayToUse} min.`,
+        });
+        await fetchAssignments();
+        setActiveTab('upcoming');
+      } else {
+        setFeedback({
+          type: 'error',
+          message: data.error || 'Failed to create test assignment.',
+        });
+      }
+    } catch (err) {
+      setFeedback({
+        type: 'error',
+        message: 'Error creating test assignment.',
+      });
+    } finally {
+      setIsCreatingTest(false);
+    }
+  };
+
+  // Handle Trigger Reminders Manually
+  const handleTriggerReminders = async () => {
+    setIsTriggeringReminders(true);
+    setFeedback({ type: '', message: '' });
+
+    try {
+      const res = await fetch(`${backendUrl}/api/assignments/trigger-reminders`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setFeedback({
+          type: 'success',
+          message: data.message || 'Reminder check executed! Check server log & inbox.',
+        });
+        await fetchAssignments();
+      } else {
+        setFeedback({
+          type: 'error',
+          message: data.error || 'Failed to trigger reminders.',
+        });
+      }
+    } catch (err) {
+      setFeedback({
+        type: 'error',
+        message: 'Error triggering reminders.',
+      });
+    } finally {
+      setIsTriggeringReminders(false);
+    }
+  };
+
+  // Handle Delete Test Assignments
+  const handleDeleteTestAssignments = async () => {
+    try {
+      const res = await fetch(`${backendUrl}/api/assignments/test`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setFeedback({
+          type: 'success',
+          message: 'Sample test assignment removed.',
+        });
+        await fetchAssignments();
+      }
+    } catch (err) {
+      console.error('Error clearing test assignments:', err);
     }
   };
 
@@ -171,7 +333,7 @@ function Dashboard() {
     const due = new Date(dateString);
     const now = new Date();
     const diffMs = due.getTime() - now.getTime();
-    if (diffMs <= 0) return 'Due now';
+    if (diffMs <= 0) return 'Past Deadline';
 
     const diffHours = Math.round(diffMs / (1000 * 60 * 60));
     const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
@@ -182,6 +344,64 @@ function Dashboard() {
     return `Due in ${diffDays} days`;
   };
 
+  // Render Reminder Status Badge
+  const renderReminderBadge = (assignment) => {
+    const status = assignment.reminderStatus || (assignment.reminderSent ? 'SENT' : 'SCHEDULED');
+
+    switch (status) {
+      case 'SENT': {
+        const timeStr = assignment.reminderSentAt
+          ? new Date(assignment.reminderSentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : '';
+        return (
+          <span className="reminder-badge badge-sent" title={`Automated reminder was successfully dispatched ${timeStr}`}>
+            ✅ Reminder Sent {timeStr && `(${timeStr})`}
+          </span>
+        );
+      }
+      case 'SENDING':
+        return (
+          <span className="reminder-badge badge-scheduled" title="Automated email is currently being delivered...">
+            ⏳ Sending Email...
+          </span>
+        );
+      case 'FAILED':
+        return (
+          <span
+            className="reminder-badge badge-failed"
+            title={assignment.reminderError || 'Reminder delivery failed. Will retry.'}
+          >
+            ⚠️ Reminder Failed
+          </span>
+        );
+      case 'SCHEDULED': {
+        const schedStr = assignment.reminderTime
+          ? new Date(assignment.reminderTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : '';
+        return (
+          <span
+            className="reminder-badge badge-scheduled"
+            title="Automated email reminder scheduled"
+          >
+            ⏰ Reminder Scheduled {schedStr && `(${schedStr})`}
+          </span>
+        );
+      }
+      case 'NOT_APPLICABLE':
+      default:
+        return (
+          <span
+            className="reminder-badge badge-not-applicable"
+            title="No reminder scheduled (past 3h window or no due date)"
+          >
+            ⚪ No Reminder Set
+          </span>
+        );
+    }
+  };
+
+  const hasTestAssignment = assignments.some((a) => a.googleAssignmentId?.startsWith('test-'));
+
   return (
     <div className="app-container">
       {/* Header */}
@@ -189,7 +409,7 @@ function Dashboard() {
         <div>
           <h1 className="brand-title">Assignment Reminder</h1>
           <p className="brand-subtitle">
-            Automated Google Classroom assignment tracker & reminder system
+            Automated Google Classroom assignment tracker & 3-hour deadline email reminder
           </p>
         </div>
 
@@ -262,8 +482,8 @@ function Dashboard() {
             <div className="auth-hero-icon">🔐</div>
             <h2 className="auth-hero-title">Sign In to Continue</h2>
             <p className="auth-hero-desc">
-              Connect your Google Classroom account to automatically sync your courses and
-              upcoming coursework deadlines without manual entry.
+              Connect your Google Classroom account to automatically sync your courses,
+              track deadlines, and receive automated email alerts <strong>3 hours</strong> before submission deadlines.
             </p>
 
             <button onClick={handleGoogleLogin} className="btn-google">
@@ -289,7 +509,7 @@ function Dashboard() {
             </button>
 
             <p className="auth-notice">
-              Requests read-only access to your enrolled courses and coursework.
+              Secure Google OAuth 2.0 with read-only Classroom permissions.
             </p>
           </section>
         ) : (
@@ -297,58 +517,249 @@ function Dashboard() {
           <section className="dashboard-card">
             <div className="card-header-row">
               <div className="section-title">
-                <h2>Upcoming Assignments</h2>
-                <span className="badge-count">{assignments.length} Upcoming</span>
+                <h2>Assignments</h2>
+                <span className="badge-count">
+                  {activeTab === 'upcoming' ? `${assignments.length} Upcoming` : `${pastAssignments.length} Past Synced`}
+                </span>
               </div>
 
-              {/* Sync Google Classroom Button */}
+              {/* Action Buttons */}
+              <div className="card-actions-group">
+                {/* Send Test Email Button */}
+                <button
+                  onClick={handleSendTestEmail}
+                  disabled={isSendingTestEmail}
+                  className="btn-secondary"
+                  title="Send a test notification to verify Gmail SMTP setup"
+                >
+                  {isSendingTestEmail ? (
+                    <>
+                      <span className="sync-spinner-dark"></span>
+                      <span>Sending Test...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>✉️</span>
+                      <span>Send Test Email</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Sync Google Classroom Button */}
+                <button
+                  onClick={handleSyncClassroom}
+                  disabled={isSyncing}
+                  className="btn-sync"
+                  title="Fetch latest assignments from Google Classroom"
+                >
+                  {isSyncing ? (
+                    <>
+                      <span className="sync-spinner"></span>
+                      <span>Syncing Classroom...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>🔄</span>
+                      <span>Sync Google Classroom</span>
+                    </>
+                  )}
+                </button>
+
+                {/* 1-Min Test Reminder Button */}
+                <button
+                  onClick={() => handleCreateTestAssignment(testDelayMinutes)}
+                  disabled={isCreatingTest}
+                  className="btn-success-soft"
+                  style={{ fontSize: '0.85rem' }}
+                  title="Create a test assignment that triggers an automated reminder in 1 minute"
+                >
+                  {isCreatingTest ? 'Creating...' : '➕ Test 1-Min Reminder'}
+                </button>
+              </div>
+            </div>
+
+            {/* Tabs for Upcoming vs Past Assignments */}
+            <div className="dashboard-tabs">
               <button
-                onClick={handleSyncClassroom}
-                disabled={isSyncing}
-                className="btn-sync"
-                title="Fetch latest assignments from Google Classroom"
+                className={`tab-btn ${activeTab === 'upcoming' ? 'active' : ''}`}
+                onClick={() => setActiveTab('upcoming')}
               >
-                {isSyncing ? (
-                  <>
-                    <span className="sync-spinner"></span>
-                    <span>Syncing Classroom...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>🔄</span>
-                    <span>Sync Google Classroom</span>
-                  </>
-                )}
+                <span>⏰ Upcoming Deadlines</span>
+                <span className="badge-count">{assignments.length}</span>
+              </button>
+              <button
+                className={`tab-btn ${activeTab === 'past' ? 'active' : ''}`}
+                onClick={() => setActiveTab('past')}
+              >
+                <span>📚 All Synced from Classroom</span>
+                <span className="badge-count">{pastAssignments.length}</span>
               </button>
             </div>
 
             {/* Assignments View */}
             {isLoadingAssignments ? (
               <div style={{ textAlign: 'center', padding: '2rem', color: '#5f6368' }}>
-                Loading upcoming assignments...
+                Loading assignments...
               </div>
-            ) : assignments.length === 0 ? (
-              /* Proper Empty State for No Upcoming Assignments */
-              <div className="assignment-placeholder">
-                <div className="placeholder-icon">🎉</div>
-                <h3 className="placeholder-title">No Upcoming Assignments Due</h3>
-                <p className="placeholder-text">
-                  You are all caught up! There are no pending assignments with upcoming deadlines
-                  in your enrolled Google Classroom courses.
-                </p>
-                <button onClick={handleSyncClassroom} disabled={isSyncing} className="btn-sync">
-                  Check for New Assignments
-                </button>
-              </div>
+            ) : activeTab === 'upcoming' ? (
+              assignments.length === 0 ? (
+                /* Empty State for Upcoming Tab */
+                <div className="assignment-placeholder">
+                  <div className="placeholder-icon">🎉</div>
+                  <h3 className="placeholder-title">No Upcoming Assignments Due</h3>
+                  <p className="placeholder-text">
+                    You are all caught up! All <strong>{pastAssignments.length} assignments</strong> in your enrolled
+                    Google Classroom courses have deadlines in the past.
+                  </p>
+                  <p style={{ fontSize: '0.85rem', color: '#5f6368', marginBottom: '1rem' }}>
+                    Want to test the <strong>automated email reminder</strong> right now with a short delay without waiting 3 hours?
+                  </p>
+
+                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', justifyContent: 'center', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+                    <label style={{ fontSize: '0.9rem', color: '#3c4043', fontWeight: '500' }}>
+                      Reminder Delay:
+                    </label>
+                    <select
+                      value={testDelayMinutes}
+                      onChange={(e) => setTestDelayMinutes(Number(e.target.value))}
+                      style={{ padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid #dadce0', fontSize: '0.9rem', backgroundColor: '#fff' }}
+                    >
+                      <option value={1}>1 Minute (Fastest)</option>
+                      <option value={2}>2 Minutes</option>
+                      <option value={5}>5 Minutes</option>
+                    </select>
+                  </div>
+
+                  <div className="placeholder-actions">
+                    <button
+                      onClick={() => handleCreateTestAssignment(testDelayMinutes)}
+                      disabled={isCreatingTest}
+                      className="btn-success-soft"
+                    >
+                      {isCreatingTest ? 'Creating Demo...' : `➕ Create Test Assignment (Reminder in ${testDelayMinutes} min)`}
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('past')}
+                      className="btn-secondary"
+                    >
+                      View All {pastAssignments.length} Synced Assignments ↗
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* List of Upcoming Assignments */
+                <>
+                  {/* Test Mode Banner */}
+                  {hasTestAssignment && (
+                    <div style={{
+                      backgroundColor: '#e8f0fe',
+                      border: '1px solid #d2e3fc',
+                      borderRadius: '8px',
+                      padding: '0.75rem 1.25rem',
+                      marginBottom: '1rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '0.5rem',
+                      fontSize: '0.88rem',
+                      color: '#1a73e8'
+                    }}>
+                      <div>
+                        <strong>🧪 Test Reminder Active:</strong> Automated email reminder will be sent to your Gmail. You can wait for the 1-minute cron or click <em>Run Reminder Check Now</em>.
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <button
+                          onClick={handleTriggerReminders}
+                          disabled={isTriggeringReminders}
+                          className="btn-sync"
+                          style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
+                          title="Force cron scheduler to evaluate pending reminders immediately"
+                        >
+                          {isTriggeringReminders ? 'Triggering...' : '⚡ Run Reminder Check Now'}
+                        </button>
+                        <button
+                          onClick={handleDeleteTestAssignments}
+                          className="btn-danger-soft"
+                          style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
+                          title="Delete simulated test assignment"
+                        >
+                          🗑️ Clear Test
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="assignments-list">
+                    {assignments.map((assignment) => (
+                      <div key={assignment._id || assignment.googleAssignmentId} className="assignment-item">
+                        <div className="assignment-main">
+                          <h4 className="assignment-title">{assignment.title}</h4>
+                          <div className="assignment-meta">
+                            <span className="course-badge">{assignment.courseName}</span>
+                            {renderReminderBadge(assignment)}
+                            {assignment.alternateLink && (
+                              <a
+                                href={assignment.alternateLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn-open-assignment"
+                              >
+                                View in Google Classroom ↗
+                              </a>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="assignment-due-info">
+                          <span className="due-date-text">
+                            Due: {formatDueDate(assignment.dueDate)}
+                          </span>
+                          {getDueBadgeText(assignment.dueDate) && (
+                            <span className="due-date-sub">
+                              {getDueBadgeText(assignment.dueDate)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Test Controls Bar */}
+                  {hasTestAssignment && (
+                    <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={handleTriggerReminders}
+                        disabled={isTriggeringReminders}
+                        className="btn-sync"
+                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.85rem' }}
+                        title="Force cron scheduler to evaluate pending 3h reminders immediately"
+                      >
+                        {isTriggeringReminders ? 'Triggering...' : '⚡ Run Reminder Check Now'}
+                      </button>
+                      <button
+                        onClick={handleDeleteTestAssignments}
+                        className="btn-danger-soft"
+                        title="Delete the sample test assignment"
+                      >
+                        🗑️ Delete Test Assignment
+                      </button>
+                    </div>
+                  )}
+                </>
+              )
             ) : (
-              /* List of Upcoming Assignments (Sorted by nearest deadline first) */
+              /* Past Synced Assignments Tab */
               <div className="assignments-list">
-                {assignments.map((assignment) => (
-                  <div key={assignment._id || assignment.googleAssignmentId} className="assignment-item">
+                {pastAssignments.map((assignment) => (
+                  <div key={assignment._id || assignment.googleAssignmentId} className="assignment-item" style={{ opacity: 0.85 }}>
                     <div className="assignment-main">
                       <h4 className="assignment-title">{assignment.title}</h4>
                       <div className="assignment-meta">
                         <span className="course-badge">{assignment.courseName}</span>
+                        <span className="reminder-badge badge-not-applicable">
+                          ⚪ Past Deadline
+                        </span>
                         {assignment.alternateLink && (
                           <a
                             href={assignment.alternateLink}
@@ -363,14 +774,9 @@ function Dashboard() {
                     </div>
 
                     <div className="assignment-due-info">
-                      <span className="due-date-text">
+                      <span className="due-date-text" style={{ color: '#80868b' }}>
                         Due: {formatDueDate(assignment.dueDate)}
                       </span>
-                      {getDueBadgeText(assignment.dueDate) && (
-                        <span className="due-date-sub" style={{ color: '#1a73e8', fontWeight: 600 }}>
-                          {getDueBadgeText(assignment.dueDate)}
-                        </span>
-                      )}
                     </div>
                   </div>
                 ))}
@@ -381,19 +787,19 @@ function Dashboard() {
 
         {/* System Architecture / Info */}
         <section className="dashboard-card">
-          <h3 className="section-title">How Google Classroom Integration Works</h3>
+          <h3 className="section-title">How Automatic 3-Hour Email Reminders Work</h3>
           <div className="info-grid">
             <div className="info-card">
-              <h4>1. Read-Only Scopes</h4>
-              <p>Securely reads enrolled courses and coursework without modifying any student work.</p>
+              <h4>1. Smart 3-Hour Window</h4>
+              <p>Calculates reminder time (due date minus 3 hours). The cron scheduler checks pending alerts every minute.</p>
             </div>
             <div className="info-card">
-              <h4>2. Smart Deduplication</h4>
-              <p>Assignments are stored by Google Assignment ID and Student ID, avoiding duplicate entries.</p>
+              <h4>2. Atomic Deduplication</h4>
+              <p>Uses atomic MongoDB locks to ensure students receive exactly one reminder email per assignment.</p>
             </div>
             <div className="info-card">
-              <h4>3. Automatic Token Refresh</h4>
-              <p>Uses stored refresh tokens to renew access silently when credentials expire.</p>
+              <h4>3. Resilient Delivery</h4>
+              <p>Gmail SMTP with automatic retry tracking, detailed error diagnostics, and test email verification.</p>
             </div>
           </div>
         </section>

@@ -37,6 +37,19 @@ const assignmentSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    reminderStatus: {
+      type: String,
+      enum: ['SCHEDULED', 'SENDING', 'SENT', 'FAILED', 'NOT_APPLICABLE'],
+      default: 'SCHEDULED',
+    },
+    reminderSentAt: {
+      type: Date,
+      default: null,
+    },
+    reminderError: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,
